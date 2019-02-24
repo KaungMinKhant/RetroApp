@@ -1,65 +1,69 @@
 package com.hexapixel.myretroapp
 
+import android.content.Intent
 import android.os.Bundle
 import android.util.Log
-import com.google.android.material.snackbar.Snackbar
-import androidx.appcompat.app.AppCompatActivity;
 import android.view.Menu
 import android.view.MenuItem
-import com.hexapixel.myretroapp.entity.Movies
-import com.hexapixel.myretroapp.entity.Regions
-import com.hexapixel.myretroapp.entity.Townships
-import com.hexapixel.myretroapp.network.API_KEY
+import androidx.appcompat.app.AppCompatActivity
+import androidx.recyclerview.widget.LinearLayoutManager
+import com.hexapixel.myretroapp.adapter.RegionAdapter
+import com.hexapixel.myretroapp.entity.Region
+import com.hexapixel.myretroapp.network.ConnectivityInterceptorImpl
 import com.hexapixel.myretroapp.network.MainService
-
+import com.hexapixel.myretroapp.network.NoConnectivityException
 import kotlinx.android.synthetic.main.activity_main.*
-import retrofit2.Call
-import retrofit2.Response
-import javax.security.auth.callback.Callback
+import kotlinx.android.synthetic.main.content_main.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import kotlin.coroutines.CoroutineContext
 
-class MainActivity : AppCompatActivity() {
+class MainActivity : AppCompatActivity(), CoroutineScope {
+    private lateinit var mJob: Job
+    private lateinit var regionAdapter: RegionAdapter
+    private val myRegion: MutableList<Region> = ArrayList()
+    override val coroutineContext: CoroutineContext
+        get() = mJob + Dispatchers.Main
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         setSupportActionBar(toolbar)
-        val service = MainService.invoke()
-        /*val regionsCall = service.getAllRegions()
-        regionsCall.enqueue(object : retrofit2.Callback<Regions>{
-            override fun onFailure(call: Call<Regions>, t: Throwable) {
-                Log.d("My_ERror", t.toString())
-            }
 
-            override fun onResponse(call: Call<Regions>, response: Response<Regions>) {
-                val regions = response.body()!!.regions
-                Log.d("MY_Regions", regions.toString())
-            }
-        })
-        val townshipCall = service.getTownships("MMR013")*/
+        regionAdapter = RegionAdapter(myRegion)
 
-        val moviesCall = service.getAllMovies("2014-09-15", "2014-10-22", API_KEY)
-        moviesCall.enqueue(object : retrofit2.Callback<Movies>{
-            override fun onFailure(call: Call<Movies>, t: Throwable) {
-                Log.d("MY_ERRor", t.toString())
-            }
-
-            override fun onResponse(call: Call<Movies>, response: Response<Movies>) {
-                val movies = response.body()!!.results
-                Log.d("My_Movie: ", movies.toString())
-            }
-        })
-        fab.setOnClickListener { view ->
-           /* townshipCall.enqueue(object : retrofit2.Callback<Townships> {
-                override fun onFailure(call: Call<Townships>, t: Throwable) {
-                    TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
-                }
-
-                override fun onResponse(call: Call<Townships>, response: Response<Townships>) {
-                   val townships = response.body()!!.townships
-                    Log.d("MY_Townships:", townships.toString())
-                }
-            })*/
+        main_recycler.apply {
+            layoutManager = LinearLayoutManager(context)
+            setHasFixedSize(true)
+            adapter = regionAdapter
         }
+
+        mJob = Job()
+        val api = MainService(ConnectivityInterceptorImpl(this))
+        launch {
+            val request = api.getRegionsAsync()
+            try {
+                val response = request.await()
+                myRegion.addAll(response.body()!!.regions)
+                regionAdapter.notifyDataSetChanged()
+
+            } catch (e: NoConnectivityException) {
+                Log.d("MY_ERROR", "NO INTERNET!")
+            } catch (e: Throwable) {
+                Log.d("MY_ERROR", "Something went wroung")
+            }
+        }
+
+        fab.setOnClickListener { view ->
+            startActivity(Intent(MainActivity@this, RegionActivity::class.java))
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        mJob.cancel()
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {

@@ -1,42 +1,48 @@
 package com.hexapixel.myretroapp.network
 
-import com.hexapixel.myretroapp.entity.Movies
 import com.hexapixel.myretroapp.entity.Regions
-import com.hexapixel.myretroapp.entity.Townships
+import com.jakewharton.retrofit2.adapter.kotlin.coroutines.CoroutineCallAdapterFactory
+import kotlinx.coroutines.Deferred
+import okhttp3.Interceptor
 import okhttp3.OkHttpClient
-import retrofit2.Call
+import retrofit2.Response
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.GET
-import retrofit2.http.Path
-import retrofit2.http.Query
-
-const val API_END = "https://api.themoviedb.org/3/"
-const val API_KEY = "44d8c2a4e38999a5badd2c7bbd7e37c8"
-
+private const val BASE_URL = "https://second.omimyanmar.org/api/"
+const val API_KEY = "2342werwerw3432wrerwfserw3rw23sfwef"
 interface MainService {
-
-    @GET("discover/movie")
-    fun getAllMovies(
-        @Query("primary_release_date.gte")
-        primary_release_date_gte: String,
-        @Query("primary_release_date.lte")
-        primary_release_date_lte: String,
-        @Query("api_key") api_key: String
-    ):Call<Movies>
-
     @GET("regions")
-    fun getAllRegions():Call<Regions>
-//sout san interface htl mhr companion object yay lox ya al ll kotlin atwat tr
+    fun getRegionsAsync(): Deferred<Response<Regions>>
 
-    @GET("townships/{region_code}")
-    fun getTownships(@Path( "region_code") region_code:String): Call<Townships>
     companion object {
-        operator fun invoke(): MainService {
+        operator fun invoke(
+            connectivityInterceptor: ConnectivityInterceptor
+        ) : MainService {
+
+            val requestInterceptor = Interceptor { chain ->
+                val url = chain.request()
+                    .url()
+                    .newBuilder()
+                    .addQueryParameter("Authorization", API_KEY)
+                    .build()
+                val request = chain.request()
+                    .newBuilder()
+                    .url(url)
+                    .build()
+
+                return@Interceptor chain.proceed(request)
+            }
+
+            val okHttpClient = OkHttpClient.Builder()
+                .addInterceptor(connectivityInterceptor)
+                .build()
+
             return Retrofit.Builder()
-                .baseUrl(API_END)
+                .baseUrl(BASE_URL)
                 .addConverterFactory(GsonConverterFactory.create())
-                .client(OkHttpClient())
+                .addCallAdapterFactory(CoroutineCallAdapterFactory())
+                .client(okHttpClient)
                 .build()
                 .create(MainService::class.java)
         }
